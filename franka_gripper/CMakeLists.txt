@@ -113,8 +113,8 @@ ament_target_dependencies(franka_gripper_node
 # )
 install(TARGETS franka_gripper franka_gripper_node
   DESTINATION lib/${PROJECT_NAME})
-install(DIRECTORY include/${PROJECT_NAME}/
-  DESTINATION include
+install(DIRECTORY include/${PROJECT_NAME}
+  DESTINATION include/${PROJECT_NAME}
 )
 install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME}

@@ -121,8 +121,8 @@ endif()
 # )
 install(TARGETS franka_hw franka_control_services
   DESTINATION lib/${PROJECT_NAME})
-install(DIRECTORY include/${PROJECT_NAME}/
-  DESTINATION include
+install(DIRECTORY include/${PROJECT_NAME}
+  DESTINATION include/${PROJECT_NAME}
 )
 
 ## Tools
