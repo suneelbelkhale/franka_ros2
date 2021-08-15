@@ -1,106 +1,126 @@
-cmake_minimum_required(VERSION 3.4)
+cmake_minimum_required(VERSION 3.5)
 project(franka_gripper)
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(catkin REQUIRED COMPONENTS
-  roscpp
-  message_generation
+find_package(ament_cmake REQUIRED)
+
+find_package(roscpp REQUIRED)
+find_package(message_generation REQUIRED)
+find_package(control_msgs REQUIRED)
+find_package(actionlib REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(xmlrpcpp REQUIRED)
+find_package(actionlib_msgs REQUIRED)
+
+find_package(Franka 0.7.0 REQUIRED)
+
+rosidl_generate_interfaces(${PROJECT_NAME}
+  GraspEpsilon.msg
+  Grasp.action
+  Homing.action
+  Stop.action
+  Move.action
+  DEPENDENCIES actionlib_msgs
+)
+
+ament_export_dependencies(
+  rclcpp
   control_msgs
   actionlib
   sensor_msgs
   xmlrpcpp
   actionlib_msgs
+  # unprovisioned depends.. TODO is this fine?
+  Franka
 )
 
-find_package(Franka 0.7.0 REQUIRED)
+ament_export_include_directories(include)
 
-add_action_files(
-  DIRECTORY action
-  FILES Grasp.action
-        Homing.action
-        Stop.action
-        Move.action
-)
-
-add_message_files(
-  DIRECTORY msg
-  FILES GraspEpsilon.msg
-)
-
-generate_messages(DEPENDENCIES actionlib_msgs)
-
-catkin_package(
-  INCLUDE_DIRS include
-  LIBRARIES franka_gripper
-  CATKIN_DEPENDS roscpp
-                 message_runtime
-                 control_msgs
-                 actionlib
-                 sensor_msgs
-                 xmlrpcpp
-                 actionlib_msgs
-  DEPENDS Franka
-)
+ament_export_libraries(franka_gripper)
 
 add_library(franka_gripper
   src/franka_gripper.cpp
 )
 
-add_dependencies(franka_gripper
-  ${${PROJECT_NAME}_EXPORTED_TARGETS}
-  ${catkin_EXPORTED_TARGETS}
-  ${PROJECT_NAME}_generate_messages_cpp
-)
+# add_dependencies(franka_gripper
+#   ${${PROJECT_NAME}_EXPORTED_TARGETS}
+#   ${catkin_EXPORTED_TARGETS}
+#   ${PROJECT_NAME}_generate_messages_cpp
+# )
 
-target_link_libraries(franka_gripper
-  ${Franka_LIBRARIES}
-  ${catkin_LIBRARIES}
-)
+# target_link_libraries(franka_gripper
+#   ${Franka_LIBRARIES}
+#   ${catkin_LIBRARIES}
+# )
 
-target_include_directories(franka_gripper SYSTEM PUBLIC
-  ${Franka_INCLUDE_DIRS}
-  ${catkin_INCLUDE_DIRS}
-)
-target_include_directories(franka_gripper PUBLIC
-  include
+# target_include_directories(franka_gripper SYSTEM PUBLIC
+#   ${Franka_INCLUDE_DIRS}
+#   ${catkin_INCLUDE_DIRS}
+# )
+
+# target_include_directories(franka_gripper PUBLIC
+#   include
+# )
+
+ament_target_dependencies(franka_gripper 
+  rclcpp
+  control_msgs
+  actionlib
+  sensor_msgs
+  xmlrpcpp
+  actionlib_msgs
+  Franka
 )
 
 add_executable(franka_gripper_node
   src/franka_gripper_node.cpp
 )
 
-add_dependencies(franka_gripper_node
-  ${${PROJECT_NAME}_EXPORTED_TARGETS}
-  ${catkin_EXPORTED_TARGETS}
-  franka_gripper
+# add_dependencies(franka_gripper_node
+#   ${${PROJECT_NAME}_EXPORTED_TARGETS}
+#   ${catkin_EXPORTED_TARGETS}
+#   franka_gripper
+# )
+
+# target_link_libraries(franka_gripper_node
+#    ${catkin_LIBRARIES}
+#    franka_gripper
+# )
+
+# target_include_directories(franka_gripper_node SYSTEM PUBLIC
+#   ${catkin_INCLUDE_DIRS}
+# )
+
+ament_target_dependencies(franka_gripper_node
+  rclcpp
+  control_msgs
+  actionlib
+  sensor_msgs
+  xmlrpcpp
+  actionlib_msgs
+  Franka
 )
 
-target_link_libraries(franka_gripper_node
-   ${catkin_LIBRARIES}
-   franka_gripper
-)
-
-target_include_directories(franka_gripper_node SYSTEM PUBLIC
-  ${catkin_INCLUDE_DIRS}
-)
 
 ## Installation
-install(TARGETS franka_gripper
-                franka_gripper_node
-  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-)
+# install(TARGETS franka_gripper
+#                 franka_gripper_node
+#   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+#   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+#   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+# )
+install(TARGETS franka_gripper franka_gripper_node
+  DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY include/${PROJECT_NAME}/
-  DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+  DESTINATION include
 )
 install(DIRECTORY launch
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+  DESTINATION share/${PROJECT_NAME}
 )
 install(DIRECTORY config
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+  DESTINATION share/${PROJECT_NAME}
 )
 
 ## Tools
@@ -119,3 +139,5 @@ if(CLANG_TOOLS)
     DEPENDS franka_gripper franka_gripper_node
   )
 endif()
+
+ament_package()

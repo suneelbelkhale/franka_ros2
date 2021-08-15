@@ -35,7 +35,6 @@ ament_export_dependencies(actionlib_msgs
 ament_export_include_directories(include)
 ament_export_libraries(franka_hw franka_control_services)
 
-ament_package()
 
 add_library(franka_hw
   src/control_mode.cpp
@@ -142,3 +141,5 @@ if(CLANG_TOOLS)
     DEPENDS franka_hw
   )
 endif()
+
+ament_package()
