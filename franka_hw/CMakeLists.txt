@@ -1,42 +1,41 @@
-cmake_minimum_required(VERSION 3.4)
+cmake_minimum_required(VERSION 3.5)
 project(franka_hw)
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(catkin REQUIRED COMPONENTS
-  actionlib
-  controller_interface
-  combined_robot_hw
-  hardware_interface
-  joint_limits_interface
-  roscpp
-  std_srvs
-  pluginlib
-  urdf
-  franka_msgs
-  message_generation
-)
-
+find_package(ament_cmake REQUIRED)
+find_package(actionlib REQUIRED)
+find_package(controller_interface REQUIRED)
+find_package(combined_robot_hw REQUIRED)
+find_package(hardware_interface REQUIRED)
+find_package(joint_limits_interface REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(std_srvs REQUIRED)
+find_package(pluginlib REQUIRED)
+find_package(urdf REQUIRED)
+find_package(franka_msgs REQUIRED)
+find_package(message_generation REQUIRED)
 find_package(Franka 0.7.0 REQUIRED)
 
-catkin_package(
-  INCLUDE_DIRS include
-  LIBRARIES franka_hw franka_control_services
-  CATKIN_DEPENDS
-    actionlib_msgs
+ament_export_dependencies(actionlib_msgs
     actionlib
     controller_interface
     combined_robot_hw
     hardware_interface
     joint_limits_interface
-    roscpp
+    rclcpp
     std_srvs
     pluginlib
     urdf
     franka_msgs
-  DEPENDS Franka
+    # unprovisioned depends.. TODO is this fine?
+    Franka
 )
+ament_export_include_directories(include)
+ament_export_libraries(franka_hw franka_control_services)
+
+ament_package()
 
 add_library(franka_hw
   src/control_mode.cpp
@@ -47,61 +46,84 @@ add_library(franka_hw
   src/trigger_rate.cpp
 )
 
-add_dependencies(franka_hw
-  ${${PROJECT_NAME}_EXPORTED_TARGETS}
-  ${catkin_EXPORTED_TARGETS}
+# add_dependencies(franka_hw
+#   ${${PROJECT_NAME}_EXPORTED_TARGETS}
+#   ${catkin_EXPORTED_TARGETS}
+# )
+
+# I think this is necessary... for Franka?
+# target_link_libraries(franka_hw
+#   ${Franka_LIBRARIES}
+# )
+
+# target_include_directories(franka_hw SYSTEM PUBLIC
+#   ${Franka_INCLUDE_DIRS}
+# )
+
+ament_target_dependencies(franka_hw 
+  actionlib
+  controller_interface
+  combined_robot_hw
+  hardware_interface
+  joint_limits_interface
+  rclcpp
+  std_srvs
+  pluginlib
+  urdf
+  franka_msgs
+  Franka
 )
 
-target_link_libraries(franka_hw
-  ${Franka_LIBRARIES}
-  ${catkin_LIBRARIES}
-  franka_control_services
-)
 
-target_include_directories(franka_hw SYSTEM PUBLIC
-  ${Franka_INCLUDE_DIRS}
-  ${catkin_INCLUDE_DIRS}
-)
-target_include_directories(franka_hw PUBLIC
-  include
-)
+# target_include_directories(franka_hw SYSTEM PUBLIC
+#   ${Franka_INCLUDE_DIRS}
+#   ${catkin_INCLUDE_DIRS}
+# )
+# target_include_directories(franka_hw PUBLIC
+#   include
+# )
 
 ## franka_control_services
 add_library(franka_control_services
   src/services.cpp
 )
 
-add_dependencies(franka_control_services
-  ${${PROJECT_NAME}_EXPORTED_TARGETS}
-  ${catkin_EXPORTED_TARGETS}
-)
+ament_target_dependencies(franka_control_services rclcpp franka_msgs Franka)
 
-target_link_libraries(franka_control_services
-  ${Franka_LIBRARIES}
-  ${catkin_LIBRARIES}
-)
+# add_dependencies(franka_control_services
+#   ${${PROJECT_NAME}_EXPORTED_TARGETS}
+#   ${catkin_EXPORTED_TARGETS}
+# )
 
-target_include_directories(franka_control_services SYSTEM PUBLIC
-  ${Franka_INCLUDE_DIRS}
-  ${catkin_INCLUDE_DIRS}
-)
+# target_link_libraries(franka_control_services
+#   ${Franka_LIBRARIES}
+#   ${catkin_LIBRARIES}
+# )
 
-target_include_directories(franka_control_services PUBLIC
-  include
-)
+# target_include_directories(franka_control_services SYSTEM PUBLIC
+#   ${Franka_INCLUDE_DIRS}
+#   ${catkin_INCLUDE_DIRS}
+# )
 
-if(CATKIN_ENABLE_TESTING)
+# target_include_directories(franka_control_services PUBLIC
+#   include
+# )
+
+# TODO
+if(BUILD_TESTING)
   add_subdirectory(test)
 endif()
 
 ## Installation
+# install(TARGETS franka_hw franka_control_services
+#   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+#   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+#   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+# )
 install(TARGETS franka_hw franka_control_services
-  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-)
+  DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY include/${PROJECT_NAME}/
-  DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+  DESTINATION include
 )
 
 ## Tools
