@@ -1,11 +1,14 @@
-cmake_minimum_required(VERSION 3.4)
+cmake_minimum_required(VERSION 3.5)
 project(franka_msgs)
 
-find_package(catkin REQUIRED COMPONENTS message_generation std_msgs actionlib_msgs)
+find_package(catkin REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(actionlib_msgs REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
 
-add_message_files(FILES Errors.msg FrankaState.msg)
-
-add_service_files(FILES
+rosidl_generate_interfaces(${PROJECT_NAME}
+  Errors.msg 
+  FrankaState.msg
   SetCartesianImpedance.srv
   SetEEFrame.srv
   SetForceTorqueCollisionBehavior.srv
@@ -13,10 +16,9 @@ add_service_files(FILES
   SetJointImpedance.srv
   SetKFrame.srv
   SetLoad.srv
+  ErrorRecovery.action
+  DEPENDENCIES std_msgs actionlib_msgs
 )
 
-add_action_files(FILES ErrorRecovery.action)
-
-generate_messages(DEPENDENCIES std_msgs actionlib_msgs)
-
-catkin_package(CATKIN_DEPENDS message_runtime std_msgs actionlib_msgs)
+ament_export_dependencies(std_msgs actionlib_msgs)
+ament_package()
