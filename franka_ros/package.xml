@@ -1,17 +1,16 @@
 <?xml version="1.0"?>
-<package format="2">
-  <name>franka_ros</name>
+<package format="3">
+  <name>franka_ros2</name>
   <version>0.8.0</version>
   <description>franka_ros is a metapackage for all Franka Emika ROS packages</description>
-  <maintainer email="support@franka.de">Franka Emika GmbH</maintainer>
+  <maintainer email="iliad@todo.todo">iliad</maintainer>
   <license>Apache 2.0</license>
 
-  <url type="website">http://wiki.ros.org/franka_ros</url>
-  <url type="repository">https://github.com/frankaemika/franka_ros</url>
-  <url type="bugtracker">https://github.com/frankaemika/franka_ros/issues</url>
-  <author>Franka Emika GmbH</author>
+  <url type="repository">https://github.com/suneelbelkhale/franka_ros2</url>
+  <url type="bugtracker">https://github.com/suneelbelkhale/franka_ros2/issues</url>
+  <author>Suneel Belkhale</author>
 
-  <buildtool_depend>catkin</buildtool_depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
 
   <exec_depend>franka_control</exec_depend>
   <exec_depend>franka_description</exec_depend>
@@ -19,8 +18,8 @@
   <exec_depend>franka_hw</exec_depend>
   <exec_depend>franka_msgs</exec_depend>
   <exec_depend>franka_visualization</exec_depend>
-
+  
   <export>
-    <metapackage />
+    <build_type>ament_cmake</build_type>
   </export>
 </package>
