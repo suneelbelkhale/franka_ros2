@@ -6,12 +6,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(ament_cmake REQUIRED)
 
-find_package(roscpp REQUIRED)
+find_package(rclcpp REQUIRED)
 find_package(message_generation REQUIRED)
 find_package(control_msgs REQUIRED)
-find_package(actionlib REQUIRED)
+find_package(rclcpp_action REQUIRED)
+find_package(rclcpp_components REQUIRED)
 find_package(sensor_msgs REQUIRED)
-find_package(xmlrpcpp REQUIRED)
+# find_package(xmlrpcpp REQUIRED)
 find_package(actionlib_msgs REQUIRED)
 
 find_package(Franka 0.7.0 REQUIRED)
@@ -27,11 +28,12 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 
 ament_export_dependencies(
   rclcpp
+  rclcpp_action
+  rclcpp_components
   control_msgs
   actionlib
   sensor_msgs
-  xmlrpcpp
-  actionlib_msgs
+  # xmlrpcpp
   # unprovisioned depends.. TODO is this fine?
   Franka
 )
@@ -66,11 +68,11 @@ add_library(franka_gripper
 
 ament_target_dependencies(franka_gripper 
   rclcpp
+  rclcpp_action
+  rclcpp_components
   control_msgs
-  actionlib
   sensor_msgs
-  xmlrpcpp
-  actionlib_msgs
+  # xmlrpcpp
   Franka
 )
 
@@ -95,11 +97,11 @@ add_executable(franka_gripper_node
 
 ament_target_dependencies(franka_gripper_node
   rclcpp
+  rclcpp_action
+  rclcpp_components
   control_msgs
-  actionlib
   sensor_msgs
-  xmlrpcpp
-  actionlib_msgs
+  # xmlrpcpp
   Franka
 )
 

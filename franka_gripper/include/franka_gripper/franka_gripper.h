@@ -5,17 +5,17 @@
 #include <cmath>
 #include <string>
 
-#include <actionlib/server/simple_action_server.h>
-#include <control_msgs/GripperCommandAction.h>
-#include <ros/node_handle.h>
+#include <control_msgs/action/GripperCommand.hpp>
+#include <rclcpp/rclcpp.hpp>
+#include <rclcpp_action/rclcpp_action.hpp>
 
 #include <franka/exception.h>
 #include <franka/gripper.h>
 #include <franka/gripper_state.h>
-#include <franka_gripper/GraspAction.h>
-#include <franka_gripper/HomingAction.h>
-#include <franka_gripper/MoveAction.h>
-#include <franka_gripper/StopAction.h>
+#include <franka_gripper/action/Grasp.hpp>
+#include <franka_gripper/action/Homing.hpp>
+#include <franka_gripper/action/Move.hpp>
+#include <franka_gripper/action/Stop.hpp>
 
 namespace franka_gripper {
 
@@ -47,8 +47,7 @@ void gripperCommandExecuteCallback(
     const franka::Gripper& gripper,
     const GraspEpsilon& grasp_epsilon,
     double default_speed,
-    actionlib::SimpleActionServer<control_msgs::GripperCommandAction>* action_server,
-    const control_msgs::GripperCommandGoalConstPtr& goal);
+    const std::shared_ptr<rclcpp_action::ServerGoalHandle<control_msgs::action::GripperCommand>> goal_handle);
 
 /**
  * Calls the libfranka move service of the gripper

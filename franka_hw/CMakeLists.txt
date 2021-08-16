@@ -62,7 +62,6 @@ add_library(franka_hw
 # )
 
 ament_target_dependencies(franka_hw 
-  actionlib
   controller_interface
   combined_robot_hw
   hardware_interface

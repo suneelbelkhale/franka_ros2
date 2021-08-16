@@ -9,11 +9,11 @@
 #include <controller_interface/multi_interface_controller.h>
 #include <franka_hw/franka_state_interface.h>
 #include <franka_hw/trigger_rate.h>
-#include <franka_msgs/FrankaState.h>
-#include <geometry_msgs/WrenchStamped.h>
+#include <franka_msgs/msg/FrankaState.hpp>
+#include <geometry_msgs/msg/WrenchStamped.hpp>
 #include <realtime_tools/realtime_publisher.h>
-#include <sensor_msgs/JointState.h>
-#include <tf2_msgs/TFMessage.h>
+#include <sensor_msgs/msg/JointState.hpp>
+#include <tf2_msgs/msg/TFMessage.hpp>
 
 namespace franka_control {
 

@@ -13,12 +13,12 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <depend>rclcpp</depend>
+  <depend>rclcpp_action</depend>
+  <depend>rclcpp_components</depend>
   <depend>libfranka</depend>
   <depend>control_msgs</depend>
-  <depend>actionlib</depend>
   <depend>sensor_msgs</depend>
-  <depend>xmlrpcpp</depend>
-  <depend>actionlib_msgs</depend>
+  <!-- <depend>xmlrpcpp</depend> -->
 
   <buildtool_depend>rosidl_default_generators</buildtool_depend>
   <exec_depend>rosidl_default_runtime</exec_depend>

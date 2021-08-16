@@ -6,14 +6,12 @@
 #include <functional>
 #include <thread>
 
-#include <ros/node_handle.h>
-
 #include <franka/exception.h>
 #include <franka/gripper_state.h>
-#include <franka_gripper/GraspAction.h>
-#include <franka_gripper/HomingAction.h>
-#include <franka_gripper/MoveAction.h>
-#include <franka_gripper/StopAction.h>
+#include <franka_gripper/action/Grasp.hpp>
+#include <franka_gripper/action/Homing.hpp>
+#include <franka_gripper/action/Move.hpp>
+#include <franka_gripper/action/Stop.hpp>
 
 namespace franka_gripper {
 
@@ -21,7 +19,7 @@ bool updateGripperState(const franka::Gripper& gripper, franka::GripperState* st
   try {
     *state = gripper.readOnce();
   } catch (const franka::Exception& ex) {
-    ROS_ERROR_STREAM("GripperServer: Exception reading gripper state: " << ex.what());
+    RCLCPP_ERROR_STREAM(rclcpp::get_logger("rclcpp"), "GripperServer: Exception reading gripper state: " << ex.what());
     return false;
   }
   return true;
@@ -31,8 +29,8 @@ void gripperCommandExecuteCallback(
     const franka::Gripper& gripper,
     const GraspEpsilon& grasp_epsilon,
     double default_speed,
-    actionlib::SimpleActionServer<control_msgs::GripperCommandAction>* action_server,
-    const control_msgs::GripperCommandGoalConstPtr& goal) {
+    const std::shared_ptr<rclcpp_action::ServerGoalHandle<control_msgs::action::GripperCommand>> goal_handle) {
+  
   auto gripper_command_handler = [goal, grasp_epsilon, default_speed, &gripper]() {
     // HACK: As one gripper finger is <mimic>, MoveIt!'s trajectory execution manager
     // only sends us the width of one finger. Multiply by 2 to get the intended width.
@@ -40,7 +38,7 @@ void gripperCommandExecuteCallback(
 
     franka::GripperState state = gripper.readOnce();
     if (target_width > state.max_width || target_width < 0.0) {
-      ROS_ERROR_STREAM("GripperServer: Commanding out of range width! max_width = "
+      RCLCPP_ERROR_STREAM(rclcpp::get_logger("rclcpp"), "GripperServer: Commanding out of range width! max_width = "
                        << state.max_width << " command = " << target_width);
       return false;
     }
@@ -55,23 +53,24 @@ void gripperCommandExecuteCallback(
                          grasp_epsilon.outer);
   };
 
+  auto result = std::make_shared<control_msgs::srv::GripperCommand::Result>();
   try {
     if (gripper_command_handler()) {
       franka::GripperState state;
       if (updateGripperState(gripper, &state)) {
-        control_msgs::GripperCommandResult result;
-        result.effort = 0.0;
-        result.position = state.width;
-        result.reached_goal = static_cast<decltype(result.reached_goal)>(true);
-        result.stalled = static_cast<decltype(result.stalled)>(false);
-        action_server->setSucceeded(result);
+        result->effort = 0.0;
+        result->position = state.width;
+        result->reached_goal = static_cast<decltype(result->reached_goal)>(true);
+        result->stalled = static_cast<decltype(result->stalled)>(false);
+        goal_handle->succeed(result);
         return;
       }
     }
   } catch (const franka::Exception& ex) {
-    ROS_ERROR_STREAM("" << ex.what());
+    RCLCPP_ERROR_STREAM(rclcpp::get_logger("rclcpp"), "" << ex.what());
   }
-  action_server->setAborted();
+  result->reached_goal = static_cast<decltype(result->reached_goal)>(false)
+  goal_handle->abort(result);
 }
 
 bool move(const franka::Gripper& gripper, const MoveGoalConstPtr& goal) {
