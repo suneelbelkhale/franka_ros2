@@ -112,9 +112,9 @@ ament_target_dependencies(franka_control_services rclcpp franka_msgs Franka)
 # )
 
 # TODO
-if(BUILD_TESTING)
-  add_subdirectory(test)
-endif()
+# if(BUILD_TESTING)
+#   add_subdirectory(test)
+# endif()
 
 ## Installation
 # install(TARGETS franka_hw franka_control_services

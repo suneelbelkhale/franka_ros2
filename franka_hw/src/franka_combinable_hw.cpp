@@ -55,11 +55,11 @@ void FrankaCombinableHW::controlLoop() {
     // Wait until controller has been activated or error has been recovered
     while (!controllerActive() || has_error_) {
       if (!controllerActive()) {
-        RCLCPP_DEBUG_THROTTLE(1, "FrankaCombinableHW::%s::control_loop(): controller is not active.",
+        RCLCPP_DEBUG_THROTTLE(robot_hw_nh_->get_logger(), 1, "FrankaCombinableHW::%s::control_loop(): controller is not active.",
                            arm_id_.c_str());
       }
       if (has_error_) {
-        RCLCPP_DEBUG_THROTTLE(1, "FrankaCombinableHW::%s::control_loop(): an error has occured.",
+        RCLCPP_DEBUG_THROTTLE(robot_hw_nh_->get_logger(), 1, "FrankaCombinableHW::%s::control_loop(): an error has occured.",
                            arm_id_.c_str());
       }
 
@@ -81,7 +81,7 @@ void FrankaCombinableHW::controlLoop() {
       }
       std::this_thread::sleep_for(1ms);
     }
-    RCLCPP_INFO("FrankaCombinableHW::%s::control_loop(): controller is active.", arm_id_.c_str());
+    RCLCPP_INFO(robot_hw_nh_->get_logger(), "FrankaCombinableHW::%s::control_loop(): controller is active.", arm_id_.c_str());
 
     // Reset commands
     {
@@ -95,7 +95,7 @@ void FrankaCombinableHW::controlLoop() {
       }
     } catch (const franka::ControlException& e) {
       // Reflex could be caught and it needs to wait for automatic error recovery
-      RCLCPP_ERROR("%s: %s", arm_id_.c_str(), e.what());
+      RCLCPP_ERROR(robot_hw_nh_->get_logger(), "%s: %s", arm_id_.c_str(), e.what());
       has_error_ = true;
       publishErrorState(has_error_);
     }
@@ -104,7 +104,7 @@ void FrankaCombinableHW::controlLoop() {
 
 void FrankaCombinableHW::setupServicesAndActionServers(std::shared_ptr<rclcpp::Node> node_handle) {
   if (!connected()) {
-    RCLCPP_ERROR(
+    RCLCPP_ERROR(robot_hw_nh_->get_logger(), 
         "FrankaCombinableHW::setupServicesAndActionServers: Cannot create services without "
         "connected robot.");
     return;
@@ -137,7 +137,7 @@ rclcpp_action::GoalResponse FrankaCombinableHW::error_recovery_handle_goal(
   
 rclcpp_action::CancelResponse FrankaCombinableHW::error_recovery_handle_cancel(
   const std::shared_ptr<rclcpp_action::ServerGoalHandle<franka_msgs::action::ErrorRecovery>> goal_handle) {
-  RCLCPP_INFO(robot_hw_nh_->get_logger(), "Cancel is not implemented! Will accept though...")
+  RCLCPP_INFO(robot_hw_nh_->get_logger(), robot_hw_nh_->get_logger(), "Cancel is not implemented! Will accept though...")
   return rclcpp_action::CancelResponse::ACCEPT;
 }
 
@@ -181,10 +181,10 @@ void FrankaCombinableHW::connect() {
 
 bool FrankaCombinableHW::disconnect() {
   if (controllerActive()) {
-    RCLCPP_ERROR("FrankaHW: Rejected attempt to disconnect while controller is still running!");
+    RCLCPP_ERROR(robot_hw_nh_->get_logger(), "FrankaHW: Rejected attempt to disconnect while controller is still running!");
     return false;
   }
-  recovery_action_server_->reset();
+  recovery_action_server_.reset();
   services_.reset();
   return FrankaHW::disconnect();
 }
@@ -208,13 +208,13 @@ bool FrankaCombinableHW::checkForConflict(
 
   ArmClaimedMap arm_claim_map;
   if (!getArmClaimedMap(resource_map, arm_claim_map)) {
-    RCLCPP_ERROR("FrankaCombinableHW: Unknown interface claimed. Conflict!");
+    RCLCPP_ERROR(robot_hw_nh_->get_logger(), "FrankaCombinableHW: Unknown interface claimed. Conflict!");
     return true;
   }
 
   // check for any claim to trajectory interfaces (non-torque) which are not supported.
   if (hasTrajectoryClaim(arm_claim_map, arm_id_)) {
-    RCLCPP_ERROR_STREAM("FrankaCombinableHW: Invalid claim joint position or velocity interface."
+    RCLCPP_ERROR_STREAM(robot_hw_nh_->get_logger(), "FrankaCombinableHW: Invalid claim joint position or velocity interface."
                      << "Note: joint position and joint velocity interfaces are not supported"
                      << " in FrankaCombinableHW. Arm:" << arm_id_ << ". Conflict!");
     return true;
@@ -292,7 +292,7 @@ bool FrankaCombinableHW::setRunFunction(const ControlMode& requested_control_mod
     return true;
   }
 
-  RCLCPP_ERROR("FrankaCombinableHW: No valid control mode selected; cannot set run function.");
+  RCLCPP_ERROR(robot_hw_nh_->get_logger(), "FrankaCombinableHW: No valid control mode selected; cannot set run function.");
   return false;
 }
 

@@ -56,20 +56,20 @@ FrankaHW::FrankaHW()
       velocity_cartesian_command_ros_({0.0, 0.0, 0.0, 0.0, 0.0, 0.0}),
       velocity_cartesian_command_libfranka_({0.0, 0.0, 0.0, 0.0, 0.0, 0.0}) {}
 
-bool FrankaHW::init(ros::NodeHandle& root_nh, ros::NodeHandle& robot_hw_nh) {
+bool FrankaHW::init(std::shared_ptr<rclcpp::Node> root_nh, std::shared_ptr<rclcpp::Node> robot_hw_nh) {
   if (initialized_) {
-    ROS_ERROR("FrankaHW: Cannot be initialized twice.");
+    RCLCPP_ERROR(robot_hw_nh->get_logger(), "FrankaHW: Cannot be initialized twice.");
     return false;
   }
 
   if (!initParameters(root_nh, robot_hw_nh)) {
-    ROS_ERROR("FrankaHW: Failed to parse all required parameters.");
+    RCLCPP_ERROR(robot_hw_nh->get_logger(), "FrankaHW: Failed to parse all required parameters.");
     return false;
   }
   try {
     initRobot();
   } catch (const std::runtime_error& error) {
-    ROS_ERROR("FrankaHW: Failed to initialize libfranka robot. %s", error.what());
+    RCLCPP_ERROR(robot_hw_nh->get_logger(), "FrankaHW: Failed to initialize libfranka robot. %s", error.what());
     return false;
   }
   initROSInterfaces(robot_hw_nh);
@@ -79,61 +79,80 @@ bool FrankaHW::init(ros::NodeHandle& root_nh, ros::NodeHandle& robot_hw_nh) {
   return true;
 }
 
-bool FrankaHW::initParameters(ros::NodeHandle& root_nh, ros::NodeHandle& robot_hw_nh) {
+bool FrankaHW::initParameters(std::shared_ptr<rclcpp::Node> root_nh, std::shared_ptr<rclcpp::Node> robot_hw_nh) {
+  robot_hw_nh->declare_parameter<std::string>("joint_names", "");
+  robot_hw_nh->declare_parameter<bool>("rate_limiting", false);
+  robot_hw_nh->declare_parameter<double>("cutoff_frequency", 0.);
+  robot_hw_nh->declare_parameter<std::string>("internal_controller", "");
+  robot_hw_nh->declare_parameter<std::string>("arm_id", "");
+  robot_hw_nh->declare_parameter<std::string>("robot_description", "");
+  robot_hw_nh->declare_parameter<std::string>("robot_ip", "");
+  robot_hw_nh->declare_parameter<double>("joint_limit_warning_threshold", 0.1);
+  robot_hw_nh->declare_parameter<std::string>("realtime_config", "enforce");
+
+
   std::vector<std::string> joint_names_vector;
-  if (!robot_hw_nh.getParam("joint_names", joint_names_vector) || joint_names_vector.size() != 7) {
-    ROS_ERROR("Invalid or no joint_names parameters provided");
+  if (!robot_hw_nh->get_parameter<std::string>("joint_names", joint_names_vector) || joint_names_vector.size() != 7) {
+    RCLCPP_ERROR(robot_hw_nh->get_logger(), "Invalid or no joint_names parameters provided");
     return false;
   }
   std::copy(joint_names_vector.cbegin(), joint_names_vector.cend(), joint_names_.begin());
 
   bool rate_limiting;
-  if (!robot_hw_nh.getParamCached("rate_limiting", rate_limiting)) {
-    ROS_ERROR("Invalid or no rate_limiting parameter provided");
+  if (!robot_hw_nh->get_parameter<bool>("rate_limiting", rate_limiting)) {
+    RCLCPP_ERROR(robot_hw_nh->get_logger(), "Invalid or no rate_limiting parameter provided");
     return false;
   }
 
   double cutoff_frequency;
-  if (!robot_hw_nh.getParamCached("cutoff_frequency", cutoff_frequency)) {
-    ROS_ERROR("Invalid or no cutoff_frequency parameter provided");
+  if (!robot_hw_nh->get_parameter<double>("cutoff_frequency", cutoff_frequency)) {
+    RCLCPP_ERROR(robot_hw_nh->get_logger(), "Invalid or no cutoff_frequency parameter provided");
     return false;
   }
 
   std::string internal_controller;
-  if (!robot_hw_nh.getParam("internal_controller", internal_controller)) {
-    ROS_ERROR("No internal_controller parameter provided");
+  if (!robot_hw_nh->get_parameter<std::string>("internal_controller", internal_controller)) {
+    RCLCPP_ERROR(robot_hw_nh->get_logger(), "No internal_controller parameter provided");
     return false;
   }
 
-  if (!robot_hw_nh.getParam("arm_id", arm_id_)) {
-    ROS_ERROR("Invalid or no arm_id parameter provided");
+  if (!robot_hw_nh->get_parameter<std::string>("arm_id", arm_id_)) {
+    RCLCPP_ERROR(robot_hw_nh->get_logger(), "Invalid or no arm_id parameter provided");
     return false;
   }
 
-  if (!urdf_model_.initParamWithNodeHandle("robot_description", root_nh)) {
-    ROS_ERROR("Could not initialize URDF model from robot_description");
+  std::string xml_string;
+  // TODO use "searchParam" when this gets implemented in ROS2
+  if (!robot_hw_nh->get_parameter<std::string>("robot_description", xml_string)){
+    RCLCPP_ERROR(robot_hw_nh->get_logger(), "Could not read parameter robot_description on parameter server");
     return false;
   }
 
-  if (!robot_hw_nh.getParam("robot_ip", robot_ip_)) {
-    ROS_ERROR("Invalid or no robot_ip parameter provided");
+  urdf_model_.initString(xml_string);
+  
+  // if (!urdf_model_.initParamWithNodeHandle("robot_description", root_nh)) {
+  //   RCLCPP_ERROR(robot_hw_nh->get_logger(), "Could not initialize URDF model from robot_description");
+  //   return false;
+  // }
+
+  if (!robot_hw_nh->get_parameter<std::string>("robot_ip", robot_ip_)) {
+    RCLCPP_ERROR(robot_hw_nh->get_logger(), "Invalid or no robot_ip parameter provided");
     return false;
   }
 
-  if (!robot_hw_nh.getParam("joint_limit_warning_threshold", joint_limit_warning_threshold_)) {
-    ROS_INFO(
+  if (!robot_hw_nh->get_parameter<double>("joint_limit_warning_threshold", joint_limit_warning_threshold_)) {
+    RCLCPP_INFO(robot_hw_nh->get_logger(), 
         "No parameter joint_limit_warning_threshold is found, using default "
         "value %f",
         joint_limit_warning_threshold_);
   }
 
-  std::string realtime_config_param = robot_hw_nh.param("realtime_config", std::string("enforce"));
-  if (realtime_config_param == "enforce") {
+  std::string realtime_config_param = robot_hw_nh->get_parameter("realtime_config");
     realtime_config_ = franka::RealtimeConfig::kEnforce;
   } else if (realtime_config_param == "ignore") {
     realtime_config_ = franka::RealtimeConfig::kIgnore;
   } else {
-    ROS_ERROR("Invalid realtime_config parameter provided. Valid values are 'enforce', 'ignore'.");
+    RCLCPP_ERROR(robot_hw_nh->get_logger(), "Invalid realtime_config parameter provided. Valid values are 'enforce', 'ignore'.");
     return false;
   }
 
@@ -173,6 +192,8 @@ bool FrankaHW::initParameters(ros::NodeHandle& root_nh, ros::NodeHandle& robot_h
   std::copy(thresholds.begin(), thresholds.end(),
             collision_config_.upper_force_thresholds_nominal.begin());
 
+  robot_hw_nh_ = robot_hw_nh;
+
   return true;
 }
 
@@ -193,7 +214,7 @@ void FrankaHW::connect() {
 
 bool FrankaHW::disconnect() {
   if (controllerActive()) {
-    ROS_ERROR("FrankaHW: Rejected attempt to disconnect while controller is still running!");
+    RCLCPP_ERROR(robot_hw_nh_->get_logger(), "FrankaHW: Rejected attempt to disconnect while controller is still running!");
     return false;
   }
   std::lock_guard<std::mutex> lock(robot_mutex_);
@@ -219,9 +240,9 @@ std::mutex& FrankaHW::robotMutex() {
 }
 
 void FrankaHW::control(
-    const std::function<bool(const ros::Time&, const ros::Duration&)>& ros_callback) {
+    const std::function<bool(const rclcpp::Time&, const rclcpp::Duration&)>& ros_callback) {
   if (!initialized_) {
-    ROS_ERROR("FrankaHW: Call to control before initialization!");
+    RCLCPP_ERROR(robot_hw_nh_->get_logger(), "FrankaHW: Call to control before initialization!");
     return;
   }
   if (!controller_active_) {
@@ -236,13 +257,13 @@ void FrankaHW::control(
     if (last_time != robot_state.time) {
       last_time = robot_state.time;
 
-      return ros_callback(ros::Time::now(), ros::Duration(time_step.toSec()));
+      return ros_callback(rclcpp::Time::now(), rclcpp::Duration(time_step.toSec()));
     }
     return true;
   });
 }
 
-void FrankaHW::enforceLimits(const ros::Duration& period) {
+void FrankaHW::enforceLimits(const rclcpp::Duration& period) {
   if (period.toSec() > 0.0) {
     position_joint_limit_interface_.enforceLimits(period);
     velocity_joint_limit_interface_.enforceLimits(period);
@@ -257,7 +278,7 @@ bool FrankaHW::checkForConflict(const std::list<hardware_interface::ControllerIn
   }
   ArmClaimedMap arm_claim_map;
   if (!getArmClaimedMap(resource_map, arm_claim_map)) {
-    ROS_ERROR_STREAM("FrankaHW: Unknown interface claimed. Conflict!");
+    RCLCPP_ERROR_STREAM(robot_hw_nh_->get_logger(), "FrankaHW: Unknown interface claimed. Conflict!");
     return true;
   }
   return hasConflictingJointAndCartesianClaim(arm_claim_map, arm_id_) ||
@@ -279,7 +300,7 @@ bool FrankaHW::prepareSwitch(const std::list<hardware_interface::ControllerInfo>
   ResourceWithClaimsMap start_resource_map = getResourceMap(start_list);
   ArmClaimedMap start_arm_claim_map;
   if (!getArmClaimedMap(start_resource_map, start_arm_claim_map)) {
-    ROS_ERROR("FrankaHW: Unknown interface claimed for starting!");
+    RCLCPP_ERROR(robot_hw_nh_->get_logger(), "FrankaHW: Unknown interface claimed for starting!");
     return false;
   }
 
@@ -288,7 +309,7 @@ bool FrankaHW::prepareSwitch(const std::list<hardware_interface::ControllerInfo>
   ResourceWithClaimsMap stop_resource_map = getResourceMap(stop_list);
   ArmClaimedMap stop_arm_claim_map;
   if (!getArmClaimedMap(stop_resource_map, stop_arm_claim_map)) {
-    ROS_ERROR("FrankaHW: Unknown interface claimed for stopping!");
+    RCLCPP_ERROR(robot_hw_nh_->get_logger(), "FrankaHW: Unknown interface claimed for stopping!");
     return false;
   }
   ControlMode stop_control_mode = getControlMode(arm_id_, stop_arm_claim_map);
@@ -303,7 +324,7 @@ bool FrankaHW::prepareSwitch(const std::list<hardware_interface::ControllerInfo>
   }
 
   if (current_control_mode_ != requested_control_mode) {
-    ROS_INFO_STREAM("FrankaHW: Prepared switching controllers to "
+    RCLCPP_INFO_STREAM(robot_hw_nh_->get_logger(), "FrankaHW: Prepared switching controllers to "
                     << requested_control_mode << " with parameters "
                     << "limit_rate=" << get_limit_rate_()
                     << ", cutoff_frequency=" << get_cutoff_frequency_()
@@ -376,13 +397,13 @@ franka::Robot& FrankaHW::robot() const {
   return *robot_;
 }
 
-void FrankaHW::read(const ros::Time& /*time*/, const ros::Duration& /*period*/) {
+void FrankaHW::read(const rclcpp::Time& /*time*/, const rclcpp::Duration& /*period*/) {
   std::lock_guard<std::mutex> ros_lock(ros_state_mutex_);
   std::lock_guard<std::mutex> libfranka_lock(libfranka_state_mutex_);
   robot_state_ros_ = robot_state_libfranka_;
 }
 
-void FrankaHW::write(const ros::Time& /*time*/, const ros::Duration& /*period*/) {
+void FrankaHW::write(const rclcpp::Time& /*time*/, const rclcpp::Duration& /*period*/) {
   std::lock_guard<std::mutex> ros_lock(ros_cmd_mutex_);
   std::lock_guard<std::mutex> libfranka_lock(libfranka_cmd_mutex_);
   pose_cartesian_command_libfranka_ = pose_cartesian_command_ros_;
@@ -523,7 +544,7 @@ bool FrankaHW::setRunFunction(const ControlMode& requested_control_mode,
   return true;
 }
 
-void FrankaHW::initROSInterfaces(ros::NodeHandle& /*robot_hw_nh*/) {
+void FrankaHW::initROSInterfaces(std::shared_ptr<rclcpp::Node> /*robot_hw_nh*/) {
   setupJointStateInterface(robot_state_ros_);
   setupJointCommandInterface(position_joint_command_ros_.q, robot_state_ros_, true,
                              position_joint_interface_);
@@ -549,23 +570,23 @@ void FrankaHW::initRobot() {
   update(robot_->readOnce());
 }
 
-void FrankaHW::setupParameterCallbacks(ros::NodeHandle& robot_hw_nh) {
+void FrankaHW::setupParameterCallbacks(std::shared_ptr<rclcpp::Node> robot_hw_nh) {
   get_limit_rate_ = [robot_hw_nh]() {
     bool rate_limiting;
-    robot_hw_nh.getParamCached("rate_limiting", rate_limiting);
+    robot_hw_nh->get_parameter<bool>("rate_limiting", rate_limiting);
     return rate_limiting;
   };
 
   get_internal_controller_ = [robot_hw_nh]() {
     std::string internal_controller;
-    robot_hw_nh.getParamCached("internal_controller", internal_controller);
+    robot_hw_nh->get_parameter<std::string>("internal_controller", internal_controller);
     franka::ControllerMode controller_mode;
     if (internal_controller == "joint_impedance") {
       controller_mode = franka::ControllerMode::kJointImpedance;
     } else if (internal_controller == "cartesian_impedance") {
       controller_mode = franka::ControllerMode::kCartesianImpedance;
     } else {
-      ROS_WARN("Invalid internal_controller parameter provided, falling back to joint impedance");
+      RCLCPP_WARN(robot_hw_nh_->get_logger(), "Invalid internal_controller parameter provided, falling back to joint impedance");
       controller_mode = franka::ControllerMode::kJointImpedance;
     }
     return controller_mode;
@@ -573,7 +594,7 @@ void FrankaHW::setupParameterCallbacks(ros::NodeHandle& robot_hw_nh) {
 
   get_cutoff_frequency_ = [robot_hw_nh]() {
     double cutoff_frequency;
-    robot_hw_nh.getParamCached("cutoff_frequency", cutoff_frequency);
+    robot_hw_nh->get_parameter<double>("cutoff_frequency", cutoff_frequency);
     return cutoff_frequency;
   };
 }
@@ -599,17 +620,19 @@ bool FrankaHW::commandHasNaN(const franka::CartesianVelocities& command) {
 }
 
 std::vector<double> FrankaHW::getCollisionThresholds(const std::string& name,
-                                                     const ros::NodeHandle& robot_hw_nh,
+                                                     const std::shared_ptr<rclcpp::Node> robot_hw_nh,
                                                      const std::vector<double>& defaults) {
+  robot_hw_nh->declare_parameter<std::vector<double>>("collision_config/" + name, thresholds);
+
   std::vector<double> thresholds;
-  if (!robot_hw_nh.getParam("collision_config/" + name, thresholds) ||
+  if (!robot_hw_nh->get_parameter<std::vector<double>>("collision_config/" + name, thresholds) ||
       thresholds.size() != defaults.size()) {
     std::string message;
     for (const double& threshold : defaults) {
       message += std::to_string(threshold);
       message += " ";
     }
-    ROS_INFO("No parameter %s found, using default values: %s", name.c_str(), message.c_str());
+    RCLCPP_INFO(robot_hw_nh->get_logger(), "No parameter %s found, using default values: %s", name.c_str(), message.c_str());
     return defaults;
   }
   return thresholds;

@@ -15,7 +15,7 @@ find_package(pluginlib REQUIRED)
 find_package(realtime_tools REQUIRED)
 find_package(roscpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
-find_package(tf REQUIRED)
+find_package(tf2 REQUIRED)
 find_package(tf2_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 
@@ -30,6 +30,7 @@ ament_export_dependencies(
   realtime_tools
   roscpp
   sensor_msgs
+  tf2
   tf2_msgs
   std_srvs
   Franka
@@ -70,6 +71,7 @@ ament_target_dependencies(franka_state_controller
   realtime_tools
   roscpp
   sensor_msgs
+  tf2
   tf2_msgs
   std_srvs
   Franka

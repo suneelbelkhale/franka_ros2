@@ -502,6 +502,8 @@ class FrankaHW : public hardware_interface::RobotHW {
   joint_limits_interface::VelocityJointSoftLimitsInterface velocity_joint_limit_interface_{};
   joint_limits_interface::EffortJointSoftLimitsInterface effort_joint_limit_interface_{};
 
+  std::shared_ptr<rclcpp::Node> robot_hw_nh_;
+
   std::mutex libfranka_state_mutex_;
   std::mutex ros_state_mutex_;
   franka::RobotState robot_state_libfranka_{};

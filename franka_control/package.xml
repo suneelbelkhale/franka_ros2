@@ -19,11 +19,11 @@
   <depend>franka_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>pluginlib</depend>
-  <depend>realtime_tools</depend>
+  <!-- <depend>realtime_tools</depend> -->
   <depend>roscpp</depend>
   <depend>sensor_msgs</depend>
   <depend>tf2_msgs</depend>
-  <depend>tf</depend>
+  <depend>tf2</depend>
   <depend>std_srvs</depend>
 
   <exec_depend>franka_description</exec_depend>
