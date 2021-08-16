@@ -4,11 +4,11 @@
 
 namespace franka_hw {
 
-TriggerRate::TriggerRate(double rate) : period_(1.0 / rate), time_stamp_(ros::Time::now()) {}
+TriggerRate::TriggerRate(double rate) : period_(1.0 / rate), time_stamp_(rclcpp::Time::now()) {}
 
 bool TriggerRate::operator()() {
-  if ((ros::Time::now() - time_stamp_).toSec() > period_) {
-    time_stamp_ = ros::Time::now();
+  if ((rclcpp::Time::now() - time_stamp_).toSec() > period_) {
+    time_stamp_ = rclcpp::Time::now();
     return true;
   }
   return false;

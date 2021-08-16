@@ -5,9 +5,6 @@
 #include <algorithm>
 #include <memory>
 
-#include <actionlib/server/simple_action_server.h>
-#include <ros/node_handle.h>
-#include <ros/time.h>
 #include <std_srvs/Trigger.h>
 
 #include <franka_hw/franka_combinable_hw.h>
@@ -18,82 +15,111 @@ namespace franka_hw {
 
 FrankaCombinedHW::FrankaCombinedHW() = default;
 
-bool FrankaCombinedHW::init(ros::NodeHandle& root_nh, ros::NodeHandle& robot_hw_nh) {
+bool FrankaCombinedHW::init(std::shared_ptr<rclcpp::Node> root_nh, std::shared_ptr<rclcpp::Node> robot_hw_nh) {
   bool success = CombinedRobotHW::init(root_nh, robot_hw_nh);
+  robot_hw_nh_ = robot_hw_nh;
   // Error recovery server for all FrankaHWs
-  combined_recovery_action_server_ =
-      std::make_unique<actionlib::SimpleActionServer<franka_msgs::ErrorRecoveryAction>>(
-          robot_hw_nh, "error_recovery",
-          [&](const franka_msgs::ErrorRecoveryGoalConstPtr&) {
-            try {
-              is_recovering_ = true;
-              for (const auto& robot_hw : robot_hw_list_) {
-                auto* franka_combinable_hw_ptr =
-                    dynamic_cast<franka_hw::FrankaCombinableHW*>(robot_hw.get());
-                if (franka_combinable_hw_ptr != nullptr && franka_combinable_hw_ptr->connected()) {
-                  franka_combinable_hw_ptr->resetError();
-                } else {
-                  ROS_ERROR("FrankaCombinedHW: failed to reset error. Is the robot connected?");
-                  is_recovering_ = false;
-                  combined_recovery_action_server_->setAborted(
-                      franka_msgs::ErrorRecoveryResult(),
-                      "dynamic_cast from RobotHW to FrankaCombinableHW failed");
-                  return;
-                }
-              }
-              is_recovering_ = false;
-              combined_recovery_action_server_->setSucceeded();
-            } catch (const franka::Exception& ex) {
-              is_recovering_ = false;
-              combined_recovery_action_server_->setAborted(franka_msgs::ErrorRecoveryResult(),
-                                                           ex.what());
-            }
-          },
-          false);
-  combined_recovery_action_server_->start();
+  combined_recovery_action_server_ = rclcpp_action::create_server<franka_msgs::action::ErrorRecovery>(robot_hw_nh, "error_recovery", 
+      std::bind(&FrankaCombinedHW::error_recovery_handle_goal, this, _1, _2),
+      std::bind(&FrankaCombinedHW::error_recovery_handle_cancel, this, _1),
+      std::bind(&FrankaCombinedHW::error_recovery_handle_accepted, this, _1)
+    );
 
   connect_server_ =
-      robot_hw_nh.advertiseService<std_srvs::Trigger::Request, std_srvs::Trigger::Response>(
-          "connect",
-          [this](std_srvs::Trigger::Request& request,
-                 std_srvs::Trigger::Response& response) -> bool {
-            try {
-              connect();
-              ROS_INFO("FrankaCombinedHW: successfully connected robots.");
-              response.success = 1u;
-              response.message = "";
-            } catch (const std::exception& e) {
-              ROS_INFO("Combined: exception %s", e.what());
-              response.success = 0u;
-              response.message =
-                  "FrankaCombinedHW: Failed to connect robot: " + std::string(e.what());
-            }
-            return true;
-          });
+    robot_hw_nh_->create_service<std_srvs::srv::Trigger>(
+        "connect",
+        [this](const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+               std::shared_ptr<std_srvs::srv::Trigger::Response> response) -> void {
+          try {
+            connect();
+            RCLCPP_INFO(robot_hw_nh_->get_logger(), "FrankaCombinedHW: successfully connected robots.");
+            response.success = 1u;
+            response.message = "";
+          } catch (const std::exception& e) {
+            RCLCPP_INFO(robot_hw_nh_->get_logger(), "Combined: exception %s", e.what());
+            response.success = 0u;
+            response.message =
+                "FrankaCombinedHW: Failed to connect robot: " + std::string(e.what());
+          }
+        }
+    );
 
   disconnect_server_ =
-      robot_hw_nh.advertiseService<std_srvs::Trigger::Request, std_srvs::Trigger::Response>(
-          "disconnect",
-          [this](std_srvs::Trigger::Request& request,
-                 std_srvs::Trigger::Response& response) -> bool {
-            bool success = disconnect();
-            response.success = success ? 1u : 0u;
-            response.message = success
-                                   ? "FrankaCombinedHW: Successfully disconnected robots."
-                                   : "FrankaCombinedHW: Failed to disconnect robots. All active "
-                                     "controllers must be stopped before you can disconnect.";
-            if (success) {
-              ROS_INFO("%s", response.message.c_str());
-            } else {
-              ROS_ERROR("%s", response.message.c_str());
-            }
-            return true;
-          });
+    robot_hw_nh_->create_service<std_srvs::srv::Trigger>(
+        "disconnect",
+        [this](const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+               std::shared_ptr<std_srvs::srv::Trigger::Response> response) -> void {
+          bool success = disconnect();
+          response->success = success ? 1u : 0u;
+          response->message = success
+                                 ? "FrankaCombinedHW: Successfully disconnected robots."
+                                 : "FrankaCombinedHW: Failed to disconnect robots. All active "
+                                   "controllers must be stopped before you can disconnect.";
+          if (success) {
+            RCLCPP_INFO(robot_hw_nh_->get_logger(), "%s", response->message.c_str());
+          } else {
+            RCLCPP_ERROR(robot_hw_nh_->get_logger(), "%s", response->message.c_str());
+          }
+        }
+    );
 
   return success;
 }
 
-void FrankaCombinedHW::read(const ros::Time& time, const ros::Duration& period) {
+// action server
+
+rclcpp_action::GoalResponse FrankaCombinedHW::error_recovery_handle_goal(
+  const rclcpp_action::GoalUUID& uuid,
+  std::shared_ptr<const franka_msgs::action::ErrorRecovery::Goal> goal) {
+    (void)uuid;
+    if (rclcpp::ok() && !is_recovering_) {
+      return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
+    } else {
+      return rclcpp_action::GoalResponse::REJECT;
+    }
+}
+  
+rclcpp_action::CancelResponse FrankaCombinedHW::error_recovery_handle_cancel(
+  const std::shared_ptr<rclcpp_action::ServerGoalHandle<franka_msgs::action::ErrorRecovery>> goal_handle) {
+  RCLCPP_INFO(robot_hw_nh_->get_logger(), "Cancel is not implemented! Will accept though...")
+  return rclcpp_action::CancelResponse::ACCEPT;
+}
+
+void FrankaCombinedHW::error_recovery_handle_accepted(
+  const std::shared_ptr<rclcpp_action::ServerGoalHandle<franka_msgs::action::ErrorRecovery>> goal_handle) {
+  using namespace std::placeholders;
+  // this needs to return quickly to avoid blocking the executor, so spin up a new thread
+  std::thread{std::bind(&FrankaCombinedHW::execute, this, _1), goal_handle}.detach();
+}
+
+void FrankaCombinedHW::execute(
+  const std::shared_ptr<rclcpp_action::ServerGoalHandle<franka_msgs::action::ErrorRecovery>> goal_handle) {
+
+  auto result = std::make_shared<franka_msgs::action::ErrorRecovery::Result>()
+
+  try {
+    is_recovering_ = true;
+    for (const auto& robot_hw : robot_hw_list_) {
+      auto* franka_combinable_hw_ptr =
+          dynamic_cast<franka_hw::FrankaCombinableHW*>(robot_hw.get());
+      if (franka_combinable_hw_ptr != nullptr && franka_combinable_hw_ptr->connected()) {
+        franka_combinable_hw_ptr->resetError();
+      } else {
+        RCLCPP_ERROR("FrankaCombinedHW: failed to reset error. Is the robot connected?");
+        is_recovering_ = false;
+        goal_handle->abort(result);
+        return;
+      }
+    }
+    is_recovering_ = false;
+    goal_handle->succeed(result);
+  } catch (const franka::Exception& ex) {
+    is_recovering_ = false;
+    goal_handle->abort(result);
+  }
+}
+
+void FrankaCombinedHW::read(const rclcpp::Time& time, const rclcpp::Duration& period) {
   // Call the read method of the single RobotHW objects.
   CombinedRobotHW::read(time, period);
   handleError();
@@ -128,7 +154,7 @@ bool FrankaCombinedHW::hasError() {
     if (franka_combinable_hw_ptr != nullptr) {
       has_error = has_error || franka_combinable_hw_ptr->hasError();
     } else {
-      ROS_ERROR("FrankaCombinedHW: dynamic_cast from RobotHW to FrankaCombinableHW failed.");
+      RCLCPP_ERROR(robot_hw_nh_->get_logger(), "FrankaCombinedHW: dynamic_cast from RobotHW to FrankaCombinableHW failed.");
       return false;
     }
   }
@@ -142,7 +168,7 @@ void FrankaCombinedHW::triggerError() {
     if (franka_combinable_hw_ptr != nullptr) {
       franka_combinable_hw_ptr->triggerError();
     } else {
-      ROS_ERROR("FrankaCombinedHW: dynamic_cast from RobotHW to FrankaCombinableHW failed.");
+      RCLCPP_ERROR(robot_hw_nh_->get_logger(), "FrankaCombinedHW: dynamic_cast from RobotHW to FrankaCombinableHW failed.");
     }
   }
 }

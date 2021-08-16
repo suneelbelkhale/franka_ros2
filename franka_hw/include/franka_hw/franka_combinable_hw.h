@@ -11,11 +11,13 @@
 #include <franka/exception.h>
 #include <franka/robot_state.h>
 
-#include <actionlib/server/simple_action_server.h>
 #include <franka_hw/franka_hw.h>
 #include <franka_hw/services.h>
 #include <franka_msgs/ErrorRecoveryAction.h>
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>
+#include "rclcpp_action/rclcpp_action.hpp"
+#include <rclcpp/time.h>
+#include <std_msgs/msg/bool.hpp>
 
 namespace franka_hw {
 
@@ -42,7 +44,7 @@ class FrankaCombinableHW : public FrankaHW {
    * @param[in] robot_hw_nh A node handle in the namespace of the robot hardware.
    * @return True if successful, false otherwise.
    */
-  bool init(ros::NodeHandle& root_nh, ros::NodeHandle& robot_hw_nh) override;
+  bool init(std::shared_ptr<rclcpp::Node> root_nh, std::shared_ptr<rclcpp::Node> robot_hw_nh) override;
 
   /**
    * Initializes the class in terms of ros_control interfaces.
@@ -52,7 +54,7 @@ class FrankaCombinableHW : public FrankaHW {
    * @param[in] robot_hw_nh A node handle in the namespace of the robot hardware.
    * @return True if successful, false otherwise.
    */
-  void initROSInterfaces(ros::NodeHandle& robot_hw_nh) override;
+  void initROSInterfaces(std::shared_ptr<rclcpp::Node> robot_hw_nh) override;
 
   /**
    * Create a libfranka robot, connecting the hardware class to the master controller.
@@ -78,9 +80,9 @@ class FrankaCombinableHW : public FrankaHW {
    * @throw franka::NetworkException if the connection is lost, e.g. after a timeout.
    * @throw franka::RealtimeException if realtime priority cannot be set for the current thread.
    */
-  void control(const std::function<bool(const ros::Time&, const ros::Duration&)>&
+  void control(const std::function<bool(const rclcpp::Time&, const rclcpp::Duration&)>&
                    ros_callback =  // NOLINT (google-default-arguments)
-               [](const ros::Time&, const ros::Duration&) {
+               [](const rclcpp::Time&, const rclcpp::Duration&) {
                  return true;
                }) override;  // NOLINT (google-default-arguments)
 
@@ -100,7 +102,7 @@ class FrankaCombinableHW : public FrankaHW {
    * @param[in] time The current time. Not used in this class.
    * @param[in] period The time passed since the last call to \ref read. Not used in this class.
    */
-  void read(const ros::Time& /*time*/, const ros::Duration& /*period*/) override;
+  void read(const rclcpp::Time& /*time*/, const rclcpp::Duration& /*period*/) override;
 
   /**
    * Writes data to the franka robot.
@@ -108,7 +110,7 @@ class FrankaCombinableHW : public FrankaHW {
    * @param[in] time The current time. Not used in this class.
    * @param[in] period The time passed since the last call to \ref write.
    */
-  void write(const ros::Time& /*time*/, const ros::Duration& period) override;
+  void write(const rclcpp::Time& /*time*/, const rclcpp::Duration& period) override;
 
   /**
    * Getter method for the arm_id which is used to distinguish between multiple
@@ -169,7 +171,22 @@ class FrankaCombinableHW : public FrankaHW {
 
   void publishErrorState(bool error);
 
-  void setupServicesAndActionServers(ros::NodeHandle& node_handle);
+  void setupServicesAndActionServers(std::shared_ptr<rclcpp::Node> node_handle);
+
+  // error recovery server
+
+  rclcpp_action::GoalResponse error_recovery_handle_goal(
+    const rclcpp_action::GoalUUID& uuid,
+    std::shared_ptr<const franka_msgs::action::ErrorRecovery::Goal> goal);
+  
+  rclcpp_action::CancelResponse error_recovery_handle_cancel(
+    const std::shared_ptr<rclcpp_action::ServerGoalHandle<franka_msgs::action::ErrorRecovery>> goal_handle);
+
+  void error_recovery_handle_accepted(
+    const std::shared_ptr<rclcpp_action::ServerGoalHandle<franka_msgs::action::ErrorRecovery>> goal_handle);
+  
+  void execute(
+    const std::shared_ptr<rclcpp_action::ServerGoalHandle<franka_msgs::action::ErrorRecovery>> goal_handle);
 
   void initRobot() override;
 
@@ -182,13 +199,12 @@ class FrankaCombinableHW : public FrankaHW {
 
   std::unique_ptr<std::thread> control_loop_thread_;
   std::unique_ptr<ServiceContainer> services_;
-  std::unique_ptr<actionlib::SimpleActionServer<franka_msgs::ErrorRecoveryAction>>
-      recovery_action_server_;
+  rclcpp_action::Server<franka_msgs::action::ErrorRecovery>::SharedPtr recovery_action_server_;
   std::atomic_bool has_error_{false};
-  ros::Publisher has_error_pub_;
+  rclcpp::Publisher<std_msgs::msg::Bool> has_error_pub_;
   std::atomic_bool error_recovered_{false};
   std::atomic_bool controller_needs_reset_{false};
-  ros::NodeHandle robot_hw_nh_;
+  std::shared_ptr<rclcpp::Node> robot_hw_nh;
 };
 
 }  // namespace franka_hw

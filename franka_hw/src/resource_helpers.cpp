@@ -2,7 +2,7 @@
 // Use of this source code is governed by the Apache-2.0 license, see LICENSE
 #include <franka_hw/resource_helpers.h>
 
-#include <ros/console.h>
+#include <rclcpp/rclcpp.hpp>
 
 namespace franka_hw {
 
@@ -46,7 +46,7 @@ bool getArmClaimedMap(ResourceWithClaimsMap& resource_map, ArmClaimedMap& arm_cl
   // 7 non-torque claims on joint_level or one claim on cartesian level.
   for (auto map_it = resource_map.begin(); map_it != resource_map.end(); map_it++) {
     if (!findArmIdInResourceId(map_it->first, &current_arm_id)) {
-      ROS_ERROR_STREAM("Resource conflict: Could not find arm_id in resource "
+      RCLCPP_ERROR_STREAM(rclcpp::get_logger("rclcpp"), "Resource conflict: Could not find arm_id in resource "
                        << map_it->first << ". Name joints as '<robot_arm_id>_joint<jointnumber>'");
       return false;
     }
@@ -138,7 +138,7 @@ ControlMode getControlMode(const std::string& arm_id, ArmClaimedMap& arm_claim_m
 bool hasConflictingMultiClaim(const ResourceWithClaimsMap& resource_map) {
   for (const auto& resource : resource_map) {
     if (resource.second.size() > 2) {
-      ROS_ERROR_STREAM("Resource conflict: " << resource.first
+      RCLCPP_ERROR_STREAM(rclcpp::get_logger("rclcpp"), "Resource conflict: " << resource.first
                                              << " is claimed with more than two command interfaces "
                                                 "which is not supported.");
       return true;
@@ -154,7 +154,7 @@ bool hasConflictingMultiClaim(const ResourceWithClaimsMap& resource_map) {
         }
       }
       if (torque_claims != 1) {
-        ROS_ERROR_STREAM("Resource conflict: "
+        RCLCPP_ERROR_STREAM(rclcpp::get_logger("rclcpp"), "Resource conflict: "
                          << resource.first
                          << " is claimed with a combination of two interfaces that is not "
                             "supported.");
@@ -175,7 +175,7 @@ bool hasConflictingJointAndCartesianClaim(const ArmClaimedMap& arm_claim_map,
          arm_claim_map.at(arm_id).joint_position_claims +
                  arm_claim_map.at(arm_id).joint_velocity_claims >
              0)) {
-      ROS_ERROR_STREAM(
+      RCLCPP_ERROR_STREAM(rclcpp::get_logger("rclcpp"), 
           "Resource conflict: Invalid combination of claims on joint AND cartesian level on arm "
           << arm_id << " which is not supported.");
       return true;
@@ -194,7 +194,7 @@ bool partiallyClaimsArmJoints(const ArmClaimedMap& arm_claim_map, const std::str
          arm_claim_map.at(arm_id).joint_velocity_claims != 7) ||
         (arm_claim_map.at(arm_id).joint_torque_claims > 0 &&
          arm_claim_map.at(arm_id).joint_torque_claims != 7)) {
-      ROS_ERROR_STREAM("Resource conflict: Partially claiming joints of arm "
+      RCLCPP_ERROR_STREAM(rclcpp::get_logger("rclcpp"), "Resource conflict: Partially claiming joints of arm "
                        << arm_id
                        << " is not supported. Make sure to claim all 7 joints of the robot.");
       return true;

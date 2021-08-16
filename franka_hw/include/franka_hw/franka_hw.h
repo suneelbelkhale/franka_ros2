@@ -19,7 +19,8 @@
 #include <hardware_interface/robot_hw.h>
 #include <joint_limits_interface/joint_limits_interface.h>
 #include <joint_limits_interface/joint_limits_urdf.h>
-#include <ros/time.h>
+#include <rclcpp/rclcpp.hpp>
+#include <rclcpp/time.h>
 #include <urdf/model.h>
 
 #include <franka_hw/control_mode.h>
@@ -55,7 +56,7 @@ class FrankaHW : public hardware_interface::RobotHW {
    *
    * @return True if successful, false otherwise.
    */
-  virtual bool init(ros::NodeHandle& root_nh, ros::NodeHandle& robot_hw_nh) override;
+  virtual bool init(std::shared_ptr<rclcpp::Node> root_nh, std::shared_ptr<rclcpp::Node> robot_hw_nh) override;
 
   /**
    * Reads the parameterization of the hardware class from the ROS parameter server
@@ -66,7 +67,7 @@ class FrankaHW : public hardware_interface::RobotHW {
    *
    * @return True if successful, false otherwise.
    */
-  virtual bool initParameters(ros::NodeHandle& root_nh, ros::NodeHandle& robot_hw_nh);
+  virtual bool initParameters(std::shared_ptr<rclcpp::Node> root_nh, std::shared_ptr<rclcpp::Node> robot_hw_nh);
 
   /**
    * Initializes the class in terms of ros_control interfaces.
@@ -76,7 +77,7 @@ class FrankaHW : public hardware_interface::RobotHW {
    * @param[in] robot_hw_nh A node handle in the namespace of the robot hardware.
    * @return True if successful, false otherwise.
    */
-  virtual void initROSInterfaces(ros::NodeHandle& robot_hw_nh);
+  virtual void initROSInterfaces(std::shared_ptr<rclcpp::Node> robot_hw_nh);
 
   /**
    * Initializes the callbacks for on-the-fly reading the parameters for rate limiting,
@@ -84,7 +85,7 @@ class FrankaHW : public hardware_interface::RobotHW {
    *
    * @param[in] robot_hw_nh A node handle in the namespace of the robot hardware.
    */
-  virtual void setupParameterCallbacks(ros::NodeHandle& robot_hw_nh);
+  virtual void setupParameterCallbacks(std::shared_ptr<rclcpp::Node> robot_hw_nh);
 
   /**
    * Create a libfranka robot, connecting the hardware class to the master controller.
@@ -121,7 +122,7 @@ class FrankaHW : public hardware_interface::RobotHW {
    * @throw franka::RealtimeException if realtime priority cannot be set for the current thread.
    */
   virtual void control(
-      const std::function<bool(const ros::Time&, const ros::Duration&)>& ros_callback);
+      const std::function<bool(const rclcpp::Time&, const rclcpp::Duration&)>& ros_callback);
 
   /**
    * Updates the controller interfaces from the given robot state.
@@ -193,7 +194,7 @@ class FrankaHW : public hardware_interface::RobotHW {
    *
    * @param[in] period The duration of the current cycle.
    */
-  virtual void enforceLimits(const ros::Duration& period);
+  virtual void enforceLimits(const rclcpp::Duration& period);
 
   /**
    * Resets the limit interfaces.
@@ -212,7 +213,7 @@ class FrankaHW : public hardware_interface::RobotHW {
    * @param[in] time The current time.
    * @param[in] period The time passed since the last call to \ref read.
    */
-  virtual void read(const ros::Time& time, const ros::Duration& period) override;
+  virtual void read(const rclcpp::Time& time, const rclcpp::Duration& period) override;
 
   /**
    * Writes data to the franka robot.
@@ -220,7 +221,7 @@ class FrankaHW : public hardware_interface::RobotHW {
    * @param[in] time The current time.
    * @param[in] period The time passed since the last call to \ref write.
    */
-  virtual void write(const ros::Time& time, const ros::Duration& period) override;
+  virtual void write(const rclcpp::Time& time, const rclcpp::Duration& period) override;
 
   /**
    * Getter for the libfranka robot instance.
@@ -292,7 +293,7 @@ class FrankaHW : public hardware_interface::RobotHW {
    * @return A set parsed parameters if valid parameters where found, the default values otherwise.
    */
   static std::vector<double> getCollisionThresholds(const std::string& name,
-                                                    const ros::NodeHandle& robot_hw_nh,
+                                                    const std::shared_ptr<rclcpp::Node> robot_hw_nh,
                                                     const std::vector<double>& defaults);
 
  protected:
@@ -328,17 +329,17 @@ class FrankaHW : public hardware_interface::RobotHW {
                     const franka::RobotState& robot_state,
                     franka::Duration time_step) {
     robot_state_libfranka_ = robot_state;
-    ros::Time now = ros::Time(0);
-    read(now, ros::Duration(time_step.toSec()));
+    auto now = rclcpp::Time(0);
+    read(now, rclcpp::Duration(time_step.toSec()));
 
     if (!controller_active_ || (ros_callback && !ros_callback(robot_state, time_step))) {
       return franka::MotionFinished(command);
     }
 
-    write(now, ros::Duration(time_step.toSec()));
+    write(now, rclcpp::Duration(time_step.toSec()));
     if (commandHasNaN(command)) {
       std::string error_message = "FrankaHW::controlCallback: Got NaN command!";
-      ROS_FATAL("%s", error_message.c_str());
+      RCLCPP_FATAL("%s", error_message.c_str());
       throw std::invalid_argument(error_message);
     }
 
@@ -361,7 +362,7 @@ class FrankaHW : public hardware_interface::RobotHW {
       const std::string& joint_name = joint_names_[i];
       auto urdf_joint = urdf_model_.getJoint(joint_name);
       if (!urdf_joint || !urdf_joint->safety || !urdf_joint->limits) {
-        ROS_WARN(
+        RCLCPP_WARN(
             "FrankaHW: Joint %s has incomplete limits and safety specs. Skipping it in the joint "
             "limit interface!",
             joint_name.c_str());
@@ -376,12 +377,12 @@ class FrankaHW : public hardware_interface::RobotHW {
           T limit_handle(command_interface.getHandle(joint_name), joint_limits, soft_limits);
           limit_interface.registerHandle(limit_handle);
         } else {
-          ROS_ERROR(
+          RCLCPP_ERROR(
               "FrankaHW: Could not parse joint limit for joint: %s for joint limit interfaces",
               joint_name.c_str());
         }
       } else {
-        ROS_ERROR(
+        RCLCPP_ERROR(
             "FrankaHW: Could not parse soft joint limit for joint %s for joint limit interfaces",
             joint_name.c_str());
       }

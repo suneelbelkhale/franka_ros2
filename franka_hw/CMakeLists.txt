@@ -5,12 +5,13 @@ set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(ament_cmake REQUIRED)
-find_package(actionlib REQUIRED)
 find_package(controller_interface REQUIRED)
 find_package(combined_robot_hw REQUIRED)
 find_package(hardware_interface REQUIRED)
 find_package(joint_limits_interface REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_action REQUIRED)
+find_package(rclcpp_components REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(urdf REQUIRED)
@@ -18,13 +19,14 @@ find_package(franka_msgs REQUIRED)
 find_package(message_generation REQUIRED)
 find_package(Franka 0.7.0 REQUIRED)
 
-ament_export_dependencies(actionlib_msgs
-    actionlib
+ament_export_dependencies(
     controller_interface
     combined_robot_hw
     hardware_interface
     joint_limits_interface
     rclcpp
+    rclcpp_action
+    rclcpp_components
     std_srvs
     pluginlib
     urdf
@@ -66,6 +68,8 @@ ament_target_dependencies(franka_hw
   hardware_interface
   joint_limits_interface
   rclcpp
+  rclcpp_action
+  rclcpp_components
   std_srvs
   pluginlib
   urdf

@@ -8,7 +8,6 @@
 #include <hardware_interface/joint_command_interface.h>
 #include <joint_limits_interface/joint_limits_interface.h>
 #include <pluginlib/class_list_macros.h>
-#include <std_msgs/Bool.h>
 
 #include <franka_hw/services.h>
 
@@ -18,12 +17,12 @@ namespace franka_hw {
 
 FrankaCombinableHW::FrankaCombinableHW() : has_error_(false), error_recovered_(false) {}
 
-bool FrankaCombinableHW::init(ros::NodeHandle& root_nh, ros::NodeHandle& robot_hw_nh) {
+bool FrankaCombinableHW::init(std::shared_ptr<rclcpp::Node> root_nh, std::shared_ptr<rclcpp::Node> robot_hw_nh) {
   robot_hw_nh_ = robot_hw_nh;
   return FrankaHW::init(root_nh, robot_hw_nh);
 }
 
-void FrankaCombinableHW::initROSInterfaces(ros::NodeHandle& robot_hw_nh) {
+void FrankaCombinableHW::initROSInterfaces(std::shared_ptr<rclcpp::Node> robot_hw_nh) {
   setupJointStateInterface(robot_state_ros_);
   setupJointCommandInterface(effort_joint_command_ros_.tau_J, robot_state_ros_, false,
                              effort_joint_interface_);
@@ -32,7 +31,7 @@ void FrankaCombinableHW::initROSInterfaces(ros::NodeHandle& robot_hw_nh) {
   setupFrankaStateInterface(robot_state_ros_);
   setupFrankaModelInterface(robot_state_ros_);
 
-  has_error_pub_ = robot_hw_nh.advertise<std_msgs::Bool>("has_error", 1, true);
+  has_error_pub_ = robot_hw_nh->create_publisher<std_msgs::msg::Bool>("has_error", 1);
   publishErrorState(has_error_);
 
   setupServicesAndActionServers(robot_hw_nh);
@@ -44,23 +43,23 @@ void FrankaCombinableHW::initRobot() {
 }
 
 void FrankaCombinableHW::publishErrorState(const bool error) {
-  std_msgs::Bool msg;
+  std_msgs::msgs::Bool msg;
   msg.data = static_cast<int>(error);
-  has_error_pub_.publish(msg);
+  has_error_pub_->publish(msg);
 }
 
 void FrankaCombinableHW::controlLoop() {
-  while (ros::ok()) {
-    ros::Time last_time = ros::Time::now();
+  while (rclcpp::ok()) {
+    auto last_time = rclcpp::Time::now();
 
     // Wait until controller has been activated or error has been recovered
     while (!controllerActive() || has_error_) {
       if (!controllerActive()) {
-        ROS_DEBUG_THROTTLE(1, "FrankaCombinableHW::%s::control_loop(): controller is not active.",
+        RCLCPP_DEBUG_THROTTLE(1, "FrankaCombinableHW::%s::control_loop(): controller is not active.",
                            arm_id_.c_str());
       }
       if (has_error_) {
-        ROS_DEBUG_THROTTLE(1, "FrankaCombinableHW::%s::control_loop(): an error has occured.",
+        RCLCPP_DEBUG_THROTTLE(1, "FrankaCombinableHW::%s::control_loop(): an error has occured.",
                            arm_id_.c_str());
       }
 
@@ -77,12 +76,12 @@ void FrankaCombinableHW::controlLoop() {
         }
       }
 
-      if (!ros::ok()) {
+      if (!rclcpp::ok()) {
         return;
       }
       std::this_thread::sleep_for(1ms);
     }
-    ROS_INFO("FrankaCombinableHW::%s::control_loop(): controller is active.", arm_id_.c_str());
+    RCLCPP_INFO("FrankaCombinableHW::%s::control_loop(): controller is active.", arm_id_.c_str());
 
     // Reset commands
     {
@@ -96,16 +95,16 @@ void FrankaCombinableHW::controlLoop() {
       }
     } catch (const franka::ControlException& e) {
       // Reflex could be caught and it needs to wait for automatic error recovery
-      ROS_ERROR("%s: %s", arm_id_.c_str(), e.what());
+      RCLCPP_ERROR("%s: %s", arm_id_.c_str(), e.what());
       has_error_ = true;
       publishErrorState(has_error_);
     }
   }
 }
 
-void FrankaCombinableHW::setupServicesAndActionServers(ros::NodeHandle& node_handle) {
+void FrankaCombinableHW::setupServicesAndActionServers(std::shared_ptr<rclcpp::Node> node_handle) {
   if (!connected()) {
-    ROS_ERROR(
+    RCLCPP_ERROR(
         "FrankaCombinableHW::setupServicesAndActionServers: Cannot create services without "
         "connected robot.");
     return;
@@ -115,32 +114,63 @@ void FrankaCombinableHW::setupServicesAndActionServers(ros::NodeHandle& node_han
   setupServices(*robot_, robot_mutex_, node_handle, *services_);
 
   if (!recovery_action_server_) {
-    recovery_action_server_ =
-        std::make_unique<actionlib::SimpleActionServer<franka_msgs::ErrorRecoveryAction>>(
-            node_handle, "error_recovery",
-            [&](const franka_msgs::ErrorRecoveryGoalConstPtr&) {
-              if (connected()) {
-                try {
-                  std::lock_guard<std::mutex> lock(robot_mutex_);
-                  robot_->automaticErrorRecovery();
-                  // error recovered => reset controller
-                  if (has_error_) {
-                    error_recovered_ = true;
-                  }
-                  has_error_ = false;
-                  publishErrorState(has_error_);
-                  recovery_action_server_->setSucceeded();
-                } catch (const franka::Exception& ex) {
-                  recovery_action_server_->setAborted(franka_msgs::ErrorRecoveryResult(),
-                                                      ex.what());
-                }
-              } else {
-                recovery_action_server_->setAborted(franka_msgs::ErrorRecoveryResult(),
-                                                    "Cannot recovery robot while disconnected.");
-              }
-            },
-            false);
-    recovery_action_server_->start();
+    recovery_action_server_ = node_handle->create_server<franka_msgs::action::ErrorRecovery>(node_handle, "error_recovery", 
+      std::bind(&FrankaCombinableHW::error_recovery_handle_goal, this, _1, _2),
+      std::bind(&FrankaCombinableHW::error_recovery_handle_cancel, this, _1),
+      std::bind(&FrankaCombinableHW::error_recovery_handle_accepted, this, _1)
+    );
+  }
+}
+
+// action server
+
+rclcpp_action::GoalResponse FrankaCombinableHW::error_recovery_handle_goal(
+  const rclcpp_action::GoalUUID& uuid,
+  std::shared_ptr<const franka_msgs::action::ErrorRecovery::Goal> goal) {
+    (void)uuid;
+    if (rclcpp::ok() && connected()) {
+      return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
+    } else {
+      return rclcpp_action::GoalResponse::REJECT;
+    }
+}
+  
+rclcpp_action::CancelResponse FrankaCombinableHW::error_recovery_handle_cancel(
+  const std::shared_ptr<rclcpp_action::ServerGoalHandle<franka_msgs::action::ErrorRecovery>> goal_handle) {
+  RCLCPP_INFO(robot_hw_nh_->get_logger(), "Cancel is not implemented! Will accept though...")
+  return rclcpp_action::CancelResponse::ACCEPT;
+}
+
+void FrankaCombinableHW::error_recovery_handle_accepted(
+  const std::shared_ptr<rclcpp_action::ServerGoalHandle<franka_msgs::action::ErrorRecovery>> goal_handle) {
+  using namespace std::placeholders;
+  // this needs to return quickly to avoid blocking the executor, so spin up a new thread
+  std::thread{std::bind(&FrankaCombinableHW::execute, this, _1), goal_handle}.detach();
+}
+
+void FrankaCombinableHW::execute(
+  const std::shared_ptr<rclcpp_action::ServerGoalHandle<franka_msgs::action::ErrorRecovery>> goal_handle) {
+
+  auto result = std::make_shared<franka_msgs::action::ErrorRecovery::Result>()
+
+  if (rclcpp::ok() && connected()) {
+    try {
+      // acquire robot lock
+      std::lock_guard<std::mutex> lock(robot_mutex_);
+      // blocking step
+      robot_->automaticErrorRecovery();
+      // error recovered => reset controller
+      if (has_error_) {
+        error_recovered_ = true;
+      }
+      has_error_ = false;
+      publishErrorState(has_error_);
+      goal_handle->succeed(result);
+    } catch (const franka::Exception& ex) {
+      goal_handle->abort(result);
+    }
+  } else {
+    goal_handle->abort(result);
   }
 }
 
@@ -151,16 +181,16 @@ void FrankaCombinableHW::connect() {
 
 bool FrankaCombinableHW::disconnect() {
   if (controllerActive()) {
-    ROS_ERROR("FrankaHW: Rejected attempt to disconnect while controller is still running!");
+    RCLCPP_ERROR("FrankaHW: Rejected attempt to disconnect while controller is still running!");
     return false;
   }
-  recovery_action_server_.reset();
+  recovery_action_server_->reset();
   services_.reset();
   return FrankaHW::disconnect();
 }
 
 void FrankaCombinableHW::control(  // NOLINT (google-default-arguments)
-    const std::function<bool(const ros::Time&, const ros::Duration&)>& /*ros_callback*/) {
+    const std::function<bool(const rclcpp::Time&, const rclcpp::Duration&)>& /*ros_callback*/) {
   if (!controller_active_) {
     return;
   }
@@ -178,13 +208,13 @@ bool FrankaCombinableHW::checkForConflict(
 
   ArmClaimedMap arm_claim_map;
   if (!getArmClaimedMap(resource_map, arm_claim_map)) {
-    ROS_ERROR("FrankaCombinableHW: Unknown interface claimed. Conflict!");
+    RCLCPP_ERROR("FrankaCombinableHW: Unknown interface claimed. Conflict!");
     return true;
   }
 
   // check for any claim to trajectory interfaces (non-torque) which are not supported.
   if (hasTrajectoryClaim(arm_claim_map, arm_id_)) {
-    ROS_ERROR_STREAM("FrankaCombinableHW: Invalid claim joint position or velocity interface."
+    RCLCPP_ERROR_STREAM("FrankaCombinableHW: Invalid claim joint position or velocity interface."
                      << "Note: joint position and joint velocity interfaces are not supported"
                      << " in FrankaCombinableHW. Arm:" << arm_id_ << ". Conflict!");
     return true;
@@ -193,12 +223,12 @@ bool FrankaCombinableHW::checkForConflict(
   return partiallyClaimsArmJoints(arm_claim_map, arm_id_);
 }
 
-void FrankaCombinableHW::read(const ros::Time& time, const ros::Duration& period) {
+void FrankaCombinableHW::read(const rclcpp::Time& time, const rclcpp::Duration& period) {
   controller_needs_reset_ = bool(error_recovered_);
   FrankaHW::read(time, period);
 }
 
-void FrankaCombinableHW::write(const ros::Time& time, const ros::Duration& period) {
+void FrankaCombinableHW::write(const rclcpp::Time& time, const rclcpp::Duration& period) {
   // if flag `controller_needs_reset_` was updated, then controller_manager. update(...,
   // reset_controller) must
   // have been executed to reset the controller.
@@ -262,7 +292,7 @@ bool FrankaCombinableHW::setRunFunction(const ControlMode& requested_control_mod
     return true;
   }
 
-  ROS_ERROR("FrankaCombinableHW: No valid control mode selected; cannot set run function.");
+  RCLCPP_ERROR("FrankaCombinableHW: No valid control mode selected; cannot set run function.");
   return false;
 }
 
